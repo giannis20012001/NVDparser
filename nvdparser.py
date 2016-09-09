@@ -13,7 +13,8 @@ import datetime
 import time
 import gzip
 import sqlite3
-import re 
+import urllib
+import re
 from termcolor import colored
 from optparse import OptionParser
 
@@ -260,43 +261,49 @@ html=etree.HTML(body)
 feedtable = html.xpath("//table[@class='xml-feed-table']")[0]
 
 nrow=0
-for trow in feedtable.xpath("tbody/tr"):
+for trow in feedtable.xpath('//tbody/tr'):
     nrow += 1
     feed = updated = dllink = size = ""
     colnum = 0
-    if ((nrow % 2) == 1):
-        for col in trow.xpath("td"):
+    if (nrow % 2) == 1:
+        for col in trow.xpath("//td"):
             colnum += 1
             if colnum == 1:
                 feed = col.text
             if colnum == 2:
                 updated = col.text
-                updatedepoch=int(time.mktime((time.strptime(updated,"%m/%d/%Y"))))
+                updatedepoch=int(time.mktime((time.strptime(updated, '%d/%m/%Y'))))
             if colnum == 3:
                 dllink = col.xpath("a")[0].get("href")
             if colnum == 4:
-                size = float(col.text)
+                if not col.text:
+                    size = 0.0
+                else:
+                    size = float(col.text)
             # Ignore the rest of the columns
             if colnum > 4:
                 break
 
+        dllink += ".xml.gz"
+        print(dllink)
+
         # Ignore the second line of the table, as the feed name occupies two rows
         if feed is not None:
             # Check if this file has been updated since the last download we made
-            if hasToBeUpdated(conn,dllink,updatedepoch):
+            if hasToBeUpdated(conn, dllink, updatedepoch):
                 print colored("File %s is not up to date. Downloading now." % dllink,"red")
                 print "%s: Updated %s, downloadig %sMB from %s" % (feed,updated,size,dllink)
                 dlname = dllink.split("/").pop()
                 # Download the link with the XML
-                br.retrieve(dllink,dlname)
+                br.retrieve(dllink, dlname)
                 # Unzip and parse the file to store it in sqlite3
-                g = gzip.open(dlname,"rb")
+                g = gzip.open(dlname, "rb")
                 gcontent = g.read()
-                g.close() # Free memory
+                g.close()  # Free memory
                 g = None
                 print "Now, importing content of the file %s" % dlname
                 ifxml = etree.XML(gcontent)
-                gcontent = None # Free memory
+                gcontent = None  # Free memory
                 for entry in ifxml.getchildren():
                     # print entry.getchildren()
                     cwe = summary = cveid = "?"
